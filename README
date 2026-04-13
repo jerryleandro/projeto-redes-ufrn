@@ -26,9 +26,7 @@ docker-compose up -d
 
 Acesse no navegador:
 
-```
 http://localhost:8080
-```
 
 ---
 
@@ -57,23 +55,18 @@ Suba:
 docker-compose up -d
 ```
 
-Acesse:
-
-* http://localhost:8081
-* http://localhost:8082
-
 ---
 
-## ⚙️ 3. Subir ambos com configuração alterada (portas diferentes)
+## ⚙️ 3. Subir ambos com configuração alterada
 
-Aqui você pode customizar as portas e configurações:
+Exemplo:
 
 ```yaml
 ports:
   - "8090:80"
 ```
 
-Ou adicionar volumes:
+Ou:
 
 ```yaml
 volumes:
@@ -84,37 +77,19 @@ volumes:
 
 ## 🌐 4. Alterar o HTML padrão
 
-Crie uma pasta `html` no projeto:
-
 ```bash
 mkdir html
 ```
-
-Crie um arquivo `index.html`:
 
 ```html
 <h1>Meu NGINX Customizado 🚀</h1>
 ```
 
-No `docker-compose.yml`:
-
-```yaml
-volumes:
-  - ./html:/usr/share/nginx/html
-```
-
-Reinicie:
-
-```bash
-docker-compose down
-docker-compose up -d
-```
-
 ---
 
-## 🔁 5. Adicionar NGINX como Proxy Reverso
+## 🔁 5. NGINX como Proxy Reverso
 
-Crie um arquivo `nginx.conf`:
+Crie `nginx.conf`:
 
 ```nginx
 events {}
@@ -135,103 +110,19 @@ http {
 }
 ```
 
-Atualize o `docker-compose.yml`:
-
-```yaml
-version: '3'
-
-services:
-  nginx1:
-    image: nginx
-    container_name: nginx1
-
-  nginx2:
-    image: nginx
-    container_name: nginx2
-
-  proxy:
-    image: nginx
-    ports:
-      - "8080:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-    depends_on:
-      - nginx1
-      - nginx2
-```
-
-Suba:
-
-```bash
-docker-compose up -d
-```
-
-Agora o acesso em:
-
-```
-http://localhost:8080
-```
-
-vai balancear entre os dois servidores.
-
 ---
 
-## 🌍 6. Subir servidor DNS
-
-Você pode usar o **dnsmasq** ou **bind9**.
-
-### Exemplo com dnsmasq:
-
-Instale:
+## 🌍 6. Servidor DNS
 
 ```bash
 sudo apt install dnsmasq -y
 ```
 
-Edite o arquivo:
-
-```bash
-sudo nano /etc/dnsmasq.conf
-```
-
-Adicione:
+Adicionar no config:
 
 ```
 address=/meusite.local/127.0.0.1
 ```
-
-Reinicie:
-
-```bash
-sudo service dnsmasq restart
-```
-
-Agora você pode acessar:
-
-```
-http://meusite.local:8080
-```
-
----
-
-## 🧠 Conclusão
-
-Com esse projeto você aprendeu:
-
-* Subir containers com Docker Compose
-* Trabalhar com múltiplas instâncias
-* Customizar conteúdo HTML
-* Implementar proxy reverso com NGINX
-* Configurar um DNS local
-
----
-
-## 💻 Requisitos
-
-* Docker
-* Docker Compose
-* WSL (Ubuntu)
-* VS Code (opcional)
 
 ---
 
