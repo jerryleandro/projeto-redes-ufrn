@@ -1,0 +1,19 @@
+entryPoints:
+  web:
+    address: ":80"
+
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: INFO
+
+accessLog: {}
+
+providers:
+  consulCatalog:
+    exposedByDefault: false
+    refreshInterval: 5s
+    endpoint:
+      address: discovery:8500

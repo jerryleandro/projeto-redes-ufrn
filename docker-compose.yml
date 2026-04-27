@@ -1,29 +1,53 @@
 name: projeto-redes2
 
 services:
-  dns:
-    image: coredns/coredns:1.11.3
-    container_name: dns
-    command: -conf /etc/coredns/Corefile
+  discovery:
+    image: hashicorp/consul:1.20
+    container_name: projeto-redes2-discovery
+    command: agent -server -bootstrap-expect=1 -ui -client=0.0.0.0 -data-dir=/consul/data
     ports:
-      - "53:53/udp"
-      - "53:53/tcp"
+      - "8500:8500"
+      - "8600:8600/udp"
+    environment:
+      SERVICE_IGNORE: "true"
     volumes:
-      - ./dns/Corefile:/etc/coredns/Corefile:ro
+      - projeto-redes2-consul-data:/consul/data
+    networks:
+      - projeto-redes2-net
+    restart: unless-stopped
+
+  registrator:
+    build:
+      context: ./discovery/registrator
+      dockerfile: Dockerfile
+    image: projeto-redes2/registrator:latest
+    container_name: projeto-redes2-registrator
+    environment:
+      CONSUL_HTTP_ADDR: http://discovery:8500
+      DOCKER_NETWORK: projeto-redes2-net
+      POLL_INTERVAL_SECONDS: "5"
+      SERVICE_IGNORE: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - discovery
     networks:
       - projeto-redes2-net
     restart: unless-stopped
 
   gateway:
-    image: nginx:1.27-alpine
+    image: traefik:v3.2
     container_name: projeto-redes2-gateway
+    command: --configFile=/etc/traefik/traefik.yml
     ports:
       - "80:80"
+      - "8080:8080"
+    environment:
+      SERVICE_IGNORE: "true"
     volumes:
-      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./gateway/traefik.yml:/etc/traefik/traefik.yml:ro
     depends_on:
-      - tenant1
-      - tenant2
+      - discovery
     networks:
       - projeto-redes2-net
     restart: unless-stopped
@@ -36,6 +60,9 @@ services:
         TENANT_DIR: tenant1
     image: projeto-redes2/tenant1:latest
     container_name: projeto-redes2-tenant1
+    environment:
+      SERVICE_NAME: tenant1
+      SERVICE_TAGS: "traefik.enable=true,traefik.http.routers.tenant1.rule=Host(`tenant1.localhost`) || Host(`tenant1.redes2.local`),traefik.http.routers.tenant1.entrypoints=web,traefik.http.services.tenant1.loadbalancer.server.port=80"
     expose:
       - "80"
     networks:
@@ -50,6 +77,9 @@ services:
         TENANT_DIR: tenant2
     image: projeto-redes2/tenant2:latest
     container_name: projeto-redes2-tenant2
+    environment:
+      SERVICE_NAME: tenant2
+      SERVICE_TAGS: "traefik.enable=true,traefik.http.routers.tenant2.rule=Host(`tenant2.localhost`) || Host(`tenant2.redes2.local`),traefik.http.routers.tenant2.entrypoints=web,traefik.http.services.tenant2.loadbalancer.server.port=80"
     expose:
       - "80"
     networks:
@@ -60,3 +90,7 @@ networks:
   projeto-redes2-net:
     name: projeto-redes2-net
     driver: bridge
+
+volumes:
+  projeto-redes2-consul-data:
+    name: projeto-redes2-consul-data
