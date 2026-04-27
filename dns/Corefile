@@ -1,0 +1,15 @@
+redes2.local:53 {
+    errors
+    log
+
+    hosts {
+        127.0.0.1 tenant1.redes2.local
+        127.0.0.1 tenant2.redes2.local
+        fallthrough
+    }
+}
+
+.:53 {
+    errors
+    forward . 1.1.1.1 8.8.8.8
+}
