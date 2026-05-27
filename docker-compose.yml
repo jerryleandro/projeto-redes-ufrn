@@ -4,6 +4,8 @@ services:
   discovery:
     image: hashicorp/consul:1.20
     container_name: projeto-redes2-discovery
+    profiles:
+      - consul-legado
     command: agent -server -bootstrap-expect=1 -ui -client=0.0.0.0 -data-dir=/consul/data
     ports:
       - "8500:8500"
@@ -22,6 +24,8 @@ services:
       dockerfile: Dockerfile
     image: projeto-redes2/registrator:latest
     container_name: projeto-redes2-registrator
+    profiles:
+      - consul-legado
     environment:
       CONSUL_HTTP_ADDR: http://discovery:8500
       DOCKER_NETWORK: projeto-redes2-net
@@ -36,18 +40,16 @@ services:
     restart: unless-stopped
 
   gateway:
-    image: traefik:v3.2
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    image: projeto-redes2/gateway-mdns:latest
     container_name: projeto-redes2-gateway
-    command: --configFile=/etc/traefik/traefik.yml
     ports:
       - "80:80"
-      - "8080:8080"
-    environment:
-      SERVICE_IGNORE: "true"
-    volumes:
-      - ./gateway/traefik.yml:/etc/traefik/traefik.yml:ro
     depends_on:
-      - discovery
+      - tenant1
+      - tenant2
     networks:
       - projeto-redes2-net
     restart: unless-stopped
@@ -60,6 +62,7 @@ services:
         TENANT_DIR: tenant1
     image: projeto-redes2/tenant1:latest
     container_name: projeto-redes2-tenant1
+    hostname: tenant1
     environment:
       SERVICE_NAME: tenant1
       SERVICE_TAGS: "traefik.enable=true,traefik.http.routers.tenant1.rule=Host(`tenant1.localhost`) || Host(`tenant1.redes2.local`),traefik.http.routers.tenant1.entrypoints=web,traefik.http.services.tenant1.loadbalancer.server.port=80"
@@ -77,6 +80,7 @@ services:
         TENANT_DIR: tenant2
     image: projeto-redes2/tenant2:latest
     container_name: projeto-redes2-tenant2
+    hostname: tenant2
     environment:
       SERVICE_NAME: tenant2
       SERVICE_TAGS: "traefik.enable=true,traefik.http.routers.tenant2.rule=Host(`tenant2.localhost`) || Host(`tenant2.redes2.local`),traefik.http.routers.tenant2.entrypoints=web,traefik.http.services.tenant2.loadbalancer.server.port=80"

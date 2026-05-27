@@ -1,19 +1,23 @@
-# Projeto Redes 2
+# Projeto Redes 2 - etapa mDNS
 
-Projeto academico da disciplina Redes 2 demonstrando uma arquitetura local com Docker Compose, service discovery dinamico, reverse proxy e dois tenants.
+Projeto academico da disciplina Redes 2 demonstrando resolucao de nomes via mDNS entre containers Docker, reverse proxy Nginx e dois tenants.
 
 ## Estrutura
 
 ```text
 .
 ├── gateway/
-│   └── traefik.yml
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   ├── nginx.conf
+│   └── traefik.yml (legado, nao utilizado nesta etapa)
 ├── discovery/
 │   └── registrator/
 │       ├── Dockerfile
 │       └── registrator.py
 ├── tenants/
 │   ├── Dockerfile
+│   ├── entrypoint.sh
 │   ├── nginx/
 │   │   └── default.conf
 │   ├── tenant1/
@@ -27,24 +31,21 @@ Projeto academico da disciplina Redes 2 demonstrando uma arquitetura local com D
 
 | Servico | Container | Funcao |
 | --- | --- | --- |
-| `discovery` | `projeto-redes2-discovery` | Consul: catalogo dinamico de servicos |
-| `registrator` | `projeto-redes2-registrator` | Observa a API do Docker e registra containers no Consul |
-| `gateway` | `projeto-redes2-gateway` | Traefik: reverse proxy dinamico |
-| `tenant1` | `projeto-redes2-tenant1` | Aplicacao do tenant 1 |
-| `tenant2` | `projeto-redes2-tenant2` | Aplicacao do tenant 2 |
+| `gateway` | `projeto-redes2-gateway` | Nginx: resolve os nomes mDNS e encaminha requisicoes |
+| `tenant1` | `projeto-redes2-tenant1` | Nginx que anuncia `tenant1.local` via Avahi |
+| `tenant2` | `projeto-redes2-tenant2` | Nginx que anuncia `tenant2.local` via Avahi |
+
+Os servicos `discovery` (Consul) e `registrator` pertencem a uma implementacao anterior e foram mantidos no perfil opcional `consul-legado`. Eles nao participam da etapa mDNS nem sobem no comando padrao.
 
 ## Fluxo
 
-1. O container `tenant1` ou `tenant2` sobe.
-2. O `registrator` observa o evento do Docker e registra o servico no Consul.
-3. O Traefik consulta o catalogo do Consul e cria as rotas HTTP dinamicamente.
-4. O navegador acessa `tenant1.localhost` ou `tenant2.localhost`.
-5. A requisicao chega ao gateway Traefik na porta `80`.
-6. O Traefik le o cabecalho `Host` e encaminha para o tenant registrado no Consul.
+1. Cada tenant inicia D-Bus e `avahi-daemon` com seu hostname definido no Compose.
+2. Avahi anuncia `tenant1.local` ou `tenant2.local` e o IP privado na rede bridge.
+3. O gateway inicia Avahi e usa `libnss-mdns` para resolver os nomes `.local`.
+4. Depois da resolucao, o Nginx do gateway inicia seus upstreams usando `tenant1.local:80` e `tenant2.local:80`.
+5. O cliente envia a requisicao para a porta `80` do host usando `tenant1.localhost` ou `tenant2.localhost`.
 
-Esta arquitetura usa service discovery, que e a alternativa mais adequada para Docker em ambiente local. Em vez de manter um arquivo DNS estatico, os containers sao registrados quando iniciam e removidos quando param.
-
-O dominio `*.localhost` e usado para teste no navegador porque resolve para `127.0.0.1` sem alterar o arquivo `hosts` do Windows. As regras tambem aceitam `tenant1.redes2.local` e `tenant2.redes2.local`, mas esses nomes ainda exigiriam que o sistema operacional soubesse resolver o dominio ate o gateway.
+O dominio `*.localhost` serve apenas para chegar ao gateway pelo host. Os nomes mDNS `.local` sao usados internamente pelo gateway para chegar aos tenants.
 
 ## Como subir
 
@@ -58,20 +59,21 @@ Verifique os containers:
 docker compose ps
 ```
 
-## Como configurar o DNS local
+## Como observar o mDNS
 
-Nao e necessario alterar o arquivo `hosts` para testar no navegador. Use:
-
-```text
-http://tenant1.localhost
-http://tenant2.localhost
-```
-
-O Consul tambem expoe DNS interno para laboratorio na porta `8600/udp`. Exemplo:
+O host nao precisa resolver os nomes mDNS para testar o proxy. Para consultar os anuncios a partir do gateway:
 
 ```bash
-dig @127.0.0.1 -p 8600 tenant1.service.consul
-dig @127.0.0.1 -p 8600 tenant2.service.consul
+docker compose exec gateway avahi-resolve-host-name -4 tenant1.local
+docker compose exec gateway avahi-resolve-host-name -4 tenant2.local
+docker compose exec gateway getent ahostsv4 tenant1.local tenant2.local
+```
+
+Para comparar o IP anunciado com o IP privado de cada tenant:
+
+```bash
+docker compose exec tenant1 hostname -i
+docker compose exec tenant2 hostname -i
 ```
 
 ## Como testar
@@ -90,17 +92,11 @@ curl -H "Host: tenant1.localhost" http://127.0.0.1
 curl -H "Host: tenant2.localhost" http://127.0.0.1
 ```
 
-Interface do Consul:
+O Nginx resolve os upstreams quando inicia. Se um tenant for recriado e receber outro IP, reinicie o gateway para que ele resolva novamente: `docker compose restart gateway`.
 
-```text
-http://localhost:8500
-```
+## Limitacoes
 
-Dashboard do Traefik:
-
-```text
-http://localhost:8080
-```
+mDNS funciona bem como demonstracao local em uma unica rede bridge com multicast disponivel. Ele nao fornece um catalogo central, nao e adequado para descoberta entre hosts Docker diferentes e o Nginx aberto nao atualiza automaticamente IPs mDNS de upstreams ja carregados. Para registro dinamico e resolucao DNS mais controlada, a proxima etapa deve avaliar um servidor DNS dedicado.
 
 ## Encerrar ambiente
 

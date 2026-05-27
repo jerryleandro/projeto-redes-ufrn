@@ -1,13 +1,10 @@
 FROM nginx:1.27-bookworm
 
-ARG TENANT_DIR
-
 RUN apt-get update \
     && apt-get install -y --no-install-recommends avahi-daemon avahi-utils dbus libnss-mdns \
     && rm -rf /var/lib/apt/lists/*
 
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY ${TENANT_DIR}/index.html /usr/share/nginx/html/index.html
+COPY nginx.conf /etc/nginx/nginx.conf
 COPY entrypoint.sh /usr/local/bin/mdns-entrypoint.sh
 
 RUN chmod +x /usr/local/bin/mdns-entrypoint.sh
